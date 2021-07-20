@@ -1,27 +1,30 @@
-
 from enum import Enum, auto
 from collections import defaultdict
-try:
-    from queue import SimpleQueue
-except ImportError:  # Python 3.6 lacks SimpleQueue
-    from queue import Queue as SimpleQueue
+from queue import SimpleQueue
 
 _RECORDS = defaultdict(list)
 _rq = SimpleQueue()
 
 
 class Event(Enum):
+    CHILD_CDS_INCONSISTENT = auto()
+    CHILD_CDNSKEY_INCONSISTENT = auto()
+    CHILD_DNSKEY_INCONSISTENT = auto()
+    BOOT_CDS_INCONSISTENT = auto()
+    BOOT_CDNSKEY_INCONSISTENT = auto()
+    BOOT_NOOP = auto()
     DNS_FAILURE = auto()
     DNS_BOGUS = auto()
     DNS_LAME = auto()
     DNS_TIMEOUT = auto()
+    HAVE_DS = auto()
     HAVE_CDS = auto()
     NO_CDS = auto()
+    NO_CDNSKEY = auto()
     OLD_SIG = auto()
     NOT_SIGNED_BY_KSK = auto()
     CDS_DELETE = auto()
-    CDS_CONTINUITY_ERR = auto()
-    CDS_UPDATE_PENDING = auto()
+    CONTINUITY_ERR = auto()
     CDS_NOOP = auto()
 
 

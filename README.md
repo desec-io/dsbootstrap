@@ -1,33 +1,25 @@
-RIPE NCC CDS scanner
-====================
+DS Bootstrapping Scanner
+========================
 
-This utility implements support for automated DNSSEC delegation
-trust maintenance for the reverse DNS zones delegated by RIPE database.
-It implements scanning for CDS records according to [RFC
-7344](https://tools.ietf.org/html/rfc7344) and [RFC
-8078](https://tools.ietf.org/html/rfc8078).
+This utility implements automated scanning of CDS/CDNSKEY bootstrapping
+records and generates DS record sets from them.  The algorithm is described
+at https://desec-io.github.io/draft-thomassen-dnsop-dnssec-bootstrapping/.
 
-Only trust anchor update and remove is supported. Bootstrapping from
-insecure to secure is not supported.
-
-It reads a [dump of DOMAIN objects](https://ftp.ripe.net/ripe/dbase/split/ripe.db.domain.gz) from the RIPE database. Only domain objects
-containing `ds-rdata:` attributes are processed.
+It reads a file with one zone name per line, followed by columns enumerating
+the zone's authoritative nameservers (these must be known a priori).  Columns
+are sparated by whitespace.  The utility output DS record sets for each zone
+whose bootstrapping records could be retrieved and validated.
 
 CDS records are scanned using default resolver of the host, which MUST be
-DNSSEC-aware and SHOULD perform DNSSEC-validation. The utility outputs RPSL-like
-file listing objects that should be modified in the RIPE database. Since the
-scanner works with *dummyfied* objects, output cannot be directly pushed into
-the Database.  Instead, it has to be used as a diff-file for a GET-modify-PUT
-operation on the database.
+DNSSEC-aware and MUST perform DNSSEC-validation.
+
 
 DNSSEC algorithm support
 ------------------------
 
-The utility does all the special validations mandated by RFC 7344. These are
-done using [dnspython](https://www.dnspython.org/). Since these validations
-provide similar level of security to standard DNSSEC validation process,
-validation in the DNS resolver is not required.
-
+For each zone, the utility validates that for each signing algorithm that
+appears in the DS record set, the zone's DNSKEY record set is signed by at
+least one key.  This is done using [dnspython](https://www.dnspython.org/).
 Therefore, the list of supported algorithms is same as the list of supported
 DNSSEC algorithms of `dnspython`.
 
@@ -38,7 +30,8 @@ This package can be installed using [`pip`](https://pypi.org/project/pip/),
 preferably into its own
 [`virtualenv`](https://docs.python.org/3/tutorial/venv.html).
 
-    $ python3 -m venv rcdss-venv
-    $ source rcdss-venv/bin/activate
-    (rcdss-venv)$ pip install rcdss
-    (rcdss-venv)$ rcdss --help
+    $ python3 -m venv venv
+    $ source venv/bin/activate
+    (venv)$ pip install -e .
+    (venv)$ dsbootstrap --help
+

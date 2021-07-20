@@ -1,22 +1,17 @@
-
 import sys
 import gzip
 import json
 import threading
 from queue import Queue, Empty
-try:
-    from queue import SimpleQueue
-except ImportError:  # Python 3.6 lacks SimpleQueue
-    SimpleQueue = Queue
+from queue import SimpleQueue
 
 import click
 import dns.resolver
 import dns.inet
 
-from .dsscanner import do_cds_scan
+from .scanner import do_scan
 from .log import setup_logger, logger
 from .stats import report_counts, report_domains
-from . import rpsl
 from . import __version__
 
 
@@ -31,6 +26,7 @@ def setup_resolvers(nss):
                 r = dns.resolver.resolve(ns, rdtype, raise_on_no_answer=False)
                 nameservers.extend(a.address for a in r)
     default_resolver.nameservers = nameservers
+    default_resolver.search = []
     logger.debug("Configured DNS resolvers: %s", ", ".join(nameservers))
 
     # If more than one nameserver is specified, then we probably want
@@ -42,7 +38,7 @@ def setup_resolvers(nss):
 def scanThread(inq, outq):
     while True:
         obj = inq.get()
-        o = do_cds_scan(obj)
+        o = do_scan(obj)
         if o:
             outq.put(o)
         inq.task_done()
@@ -56,7 +52,7 @@ def scanThread(inq, outq):
 )
 @click.option(
     "--output", "-o", type=click.File("w", atomic=True, lazy=False),
-    default=sys.stdout, help="Output RPSL-like file "
+    default=sys.stdout, help="Output result file "
     "[default: stdout]",
 )
 @click.option(
@@ -106,17 +102,15 @@ def main(input_, output, logfile, verbose, threads, ns, dump_stats):
             daemon=True,
         ).start()
 
-    for obj in filter(
-        lambda obj: "ds-rdata" in obj,
-        rpsl.parse_rpsl_objects(inf),
-    ):
+    for line in inf:
+        obj = line.split()
         inq.put(obj)
 
     inq.join()
     try:
         while True:
             o = outq.get_nowait()
-            print(rpsl.write_rpsl_object(o), file=output)
+            print(o, file=output)
     except Empty:
         pass
     logger.info("Finished. Here are some stats:\n%s", report_counts())
