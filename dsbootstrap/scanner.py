@@ -64,23 +64,25 @@ def do_scan(obj):
     cdnskey_map = {None: res}
 
     ### Step 3
-    wire_format = dns.name.from_text(domain).to_wire()
-    digest = sha256(wire_format).digest()
-    signaling_label = b32encode(digest).translate(b32_normal_to_hex).rstrip(b'=').lower().decode()
-    signaling_names = {f'{signaling_label}._boot.{auth}' for auth in auths}
+    prefix, suffix = domain.split('.', 1)
+    suffix_wire_format = dns.name.from_text(suffix).to_wire()
+    suffix_digest = sha256(suffix_wire_format).digest()
+    suffix_digest = b32encode(suffix_digest).translate(b32_normal_to_hex).rstrip(b'=')
+    signaling_name = prefix + '.' + suffix_digest.lower().decode()
+    signaling_fqdns = {f'{signaling_name}._boot.{auth}' for auth in auths}
 
-    for signaling_name in signaling_names:
-        res = query_dns_and_extract_rdata(signaling_name, 'CDS')
+    for signaling_fqdn in signaling_fqdns:
+        res = query_dns_and_extract_rdata(signaling_fqdn, 'CDS')
         if res is None:
             record(domain, Event.NO_CDS)
         else:
-            cds_map[signaling_name] = res
-    for signaling_name in signaling_names:
-        res = query_dns_and_extract_rdata(signaling_name, 'CDNSKEY')
+            cds_map[signaling_fqdn] = res
+    for signaling_fqdn in signaling_fqdns:
+        res = query_dns_and_extract_rdata(signaling_fqdn, 'CDNSKEY')
         if res is None:
             record(domain, Event.NO_CDNSKEY)
         else:
-            cdnskey_map[signaling_name] = res
+            cdnskey_map[signaling_fqdn] = res
 
     ### Step 4
     if not all_equal(cds_map.values()):
