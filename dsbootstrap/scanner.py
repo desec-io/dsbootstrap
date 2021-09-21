@@ -43,6 +43,7 @@ def do_scan(obj):
         return
 
     # Fetch auth IP addresses
+    # TODO share across tasks
     auths_map = defaultdict(set)
     for auth in auths:
         for rdtype in ["AAAA", "A"]:
@@ -193,16 +194,16 @@ def filter_dnskey_set(dnskeyset, dsset):
 
 
 def fetch_rrset_with_consistency(domain, rdtype, auths_map):
-    cds = [query_dns(domain, rdtype, nameservers) for nameservers in auths_map.values()]
-    if not all_equal([v.rrset for v in cds]):
+    rds = [query_dns(domain, rdtype, nameservers) for nameservers in auths_map.values()]
+    if not all_equal([v.rrset for v in rds]):
         return
-    return {rd.to_text() for rd in cds[0]}
+    return {rd.to_text() for rd in rds[0]}
 
 
 def query_dns_and_extract_rdata(qname, rdtype):
     res = query_dns(qname, rdtype)
     if res is None:
-        record(domain, Event.DNS_FAILURE)
+        record(qname, Event.DNS_FAILURE)
     elif res.rrset is None:
         return None
     return {rd.to_text() for rd in res}
