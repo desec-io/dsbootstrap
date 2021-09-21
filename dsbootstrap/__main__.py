@@ -35,11 +35,19 @@ def setup_resolvers(nss):
         default_resolver.rotate = True
 
 
+def enqueue(input, inq):
+    for line in input:
+        obj = line.split()
+        inq.put(obj)
+
+
 def scanThread(inq, outq):
     while True:
         obj = inq.get()
         o = do_scan(obj)
-        if o:
+        if isinstance(o, list):
+            enqueue(o, inq)
+        elif o:
             outq.put(o)
         inq.task_done()
 
@@ -102,9 +110,7 @@ def main(input_, output, logfile, verbose, threads, ns, dump_stats):
             daemon=True,
         ).start()
 
-    for line in inf:
-        obj = line.split()
-        inq.put(obj)
+    enqueue(inf, inq)
 
     inq.join()
     try:

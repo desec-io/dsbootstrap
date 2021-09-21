@@ -1,7 +1,7 @@
 from base64 import b32encode
 import datetime
 from hashlib import sha256
-from itertools import groupby
+from itertools import chain, groupby
 import random
 from collections import defaultdict
 
@@ -23,6 +23,32 @@ def all_equal(iterable):
     return next(g, True) and not next(g, False)
 
 
+def signaling_hash(suffix):
+    suffix_wire_format = dns.name.from_text(suffix).to_wire()
+    suffix_digest = sha256(suffix_wire_format).digest()
+    suffix_digest = b32encode(suffix_digest).translate(b32_normal_to_hex).rstrip(b'=')
+    return suffix_digest.lower().decode()
+
+
+def next_nsec_prefix(prefix, ancestor):
+    res = query_dns(prefix + ancestor, 'NSEC')
+    rdataset, = [rdataset for rdataset in chain(res.response.answer, res.response.authority)
+                 if rdataset.rdtype == dns.rdatatype.RdataType.NSEC]
+    next_prefix = str(rdataset[0].next).rpartition(f'.{ancestor}')[0]
+    return f'{next_prefix}.' if next_prefix else None
+
+
+def walk_ancestor(ancestor, auths):
+    prefix_map = {auth: set() for auth in auths}
+    for auth in auths:
+        entrypoint = f'{signaling_hash(ancestor)}._boot.{auth}'
+        next_prefix = next_nsec_prefix('', entrypoint)
+        while next_prefix:
+            prefix_map[auth].add(next_prefix)
+            next_prefix = next_nsec_prefix(next_prefix, entrypoint)
+    return [ ' '.join([prefix + ancestor, *auths]) for prefix in set.intersection(*prefix_map.values()) ]
+
+
 def do_scan(obj):
     """
     Scan for CDS/CDNSKEY records for given tuple of child domain and its
@@ -32,7 +58,13 @@ def do_scan(obj):
     """
     domain, *auths = obj
     domain = domain.rstrip('.').lower() + '.'
+    prefix, suffix = domain.split('.', 1)
     logger.info(f"Processing domain: {domain}")
+
+    if not prefix:
+        logger.warning(f'Performing NSEC walk of {suffix} on {auths} ...')
+        # TODO make sure that zones are in fact delegated to *auths (prevent sneaking in other zones from NSEC walk)
+        return walk_ancestor(suffix, auths)
 
     # TODO move steps to separate functions, at unit tests
 
@@ -65,11 +97,7 @@ def do_scan(obj):
     cdnskey_map = {None: res}
 
     ### Step 3
-    prefix, suffix = domain.split('.', 1)
-    suffix_wire_format = dns.name.from_text(suffix).to_wire()
-    suffix_digest = sha256(suffix_wire_format).digest()
-    suffix_digest = b32encode(suffix_digest).translate(b32_normal_to_hex).rstrip(b'=')
-    signaling_name = prefix + '.' + suffix_digest.lower().decode()
+    signaling_name = prefix + '.' + signaling_hash(suffix)
     signaling_fqdns = {f'{signaling_name}._boot.{auth}' for auth in auths}
 
     for signaling_fqdn in signaling_fqdns:
@@ -128,6 +156,7 @@ def do_scan(obj):
 
 def query_dns(domain, rdtype, nameservers=None):
     """Make a query to the local resolver. Return answer object."""
+    logger.debug(f'Querying {rdtype} for {domain}')
     default_resolver = dns.resolver.get_default_resolver()
     # We use separate resolver instance per query
     resolver = dns.resolver.Resolver(configure=False)
