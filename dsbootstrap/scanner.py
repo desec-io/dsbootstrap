@@ -23,30 +23,30 @@ def all_equal(iterable):
     return next(g, True) and not next(g, False)
 
 
-def signaling_hash(suffix):
-    suffix_wire_format = dns.name.from_text(suffix).to_wire()
+def signaling_hash(domain):
+    suffix_wire_format = domain.to_wire()
     suffix_digest = sha256(suffix_wire_format).digest()
     suffix_digest = b32encode(suffix_digest).translate(b32_normal_to_hex).rstrip(b'=')
-    return suffix_digest.lower().decode()
+    return suffix_digest.lower()
 
 
 def next_nsec_prefix(prefix, ancestor):
     res = query_dns(prefix + ancestor, 'NSEC')
     rdataset, = [rdataset for rdataset in chain(res.response.answer, res.response.authority)
                  if rdataset.rdtype == dns.rdatatype.RdataType.NSEC]
-    next_prefix = str(rdataset[0].next).rpartition(f'.{ancestor}')[0]
-    return f'{next_prefix}.' if next_prefix else None
+    next_name = rdataset[0].next
+    return next_name - ancestor if next_name.is_subdomain(ancestor) else None
 
 
 def walk_ancestor(ancestor, auths):
     prefix_map = {auth: set() for auth in auths}
     for auth in auths:
-        entrypoint = f'{signaling_hash(ancestor)}._boot.{auth}'
-        next_prefix = next_nsec_prefix('', entrypoint)
+        entrypoint = dns.name.Name([signaling_hash(ancestor), '_boot']) + dns.name.from_text(auth)
+        next_prefix = next_nsec_prefix(dns.name.Name([]), entrypoint)
         while next_prefix:
             prefix_map[auth].add(next_prefix)
             next_prefix = next_nsec_prefix(next_prefix, entrypoint)
-    return [ ' '.join([prefix + ancestor, *auths]) for prefix in set.intersection(*prefix_map.values()) ]
+    return [ ' '.join([str(prefix + ancestor), *auths]) for prefix in set.intersection(*prefix_map.values()) ]
 
 
 def do_scan(obj):
@@ -57,14 +57,14 @@ def do_scan(obj):
     Otherwise, return None
     """
     domain, *auths = obj
-    domain = domain.rstrip('.').lower() + '.'
-    prefix, suffix = domain.split('.', 1)
-    logger.info(f"Processing domain: {domain}")
-
-    if not prefix:
-        logger.warning(f'Performing NSEC walk of {suffix} on {auths} ...')
+    if domain[0] == '.':
+        domain = domain[1:]
+        logger.warning(f'Performing NSEC walk of {domain} on {auths} ...')
         # TODO make sure that zones are in fact delegated to *auths (prevent sneaking in other zones from NSEC walk)
-        return walk_ancestor(suffix, auths)
+        return walk_ancestor(dns.name.from_text(domain), auths)
+
+    domain = dns.name.from_text(domain.lower())
+    logger.info(f"Processing domain: {domain}")
 
     # TODO move steps to separate functions, at unit tests
 
@@ -97,8 +97,8 @@ def do_scan(obj):
     cdnskey_map = {None: res}
 
     ### Step 3
-    signaling_name = prefix + '.' + signaling_hash(suffix)
-    signaling_fqdns = {f'{signaling_name}._boot.{auth}' for auth in auths}
+    signaling_name = dns.name.Name([domain[0], signaling_hash(domain.parent())])
+    signaling_fqdns = {signaling_name + dns.name.Name(['_boot']) + dns.name.from_text(auth) for auth in auths}
 
     for signaling_fqdn in signaling_fqdns:
         res = query_dns_and_extract_rdata(signaling_fqdn, 'CDS')
@@ -130,7 +130,7 @@ def do_scan(obj):
     logger.debug(f"CDNSKEY rdataset: {cdnskey}")
 
     ### Step 5
-    ds = dns.rrset.RRset(dns.name.from_text(domain), dns.rdataclass.IN, dns.rdatatype.DS)
+    ds = dns.rrset.RRset(domain, dns.rdataclass.IN, dns.rdatatype.DS)
     for rdata in cds:
         ds.add(dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.DS, rdata))
     # TODO do something with cdnskey?
