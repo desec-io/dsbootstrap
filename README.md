@@ -1,19 +1,20 @@
-# DS Bootstrapping Scanner
+# Authenticated DS Bootstrapping Scanner
 
-This utility implements automated scanning of CDS/CDNSKEY bootstrapping
-records and generates DS record sets from them.  The algorithm is described
-at https://desec-io.github.io/draft-thomassen-dnsop-dnssec-bootstrapping/.
+This utility implements RFC 8078 bootstrapping of DS records via CDS/CDNSKEY
+processing, but with added authentication.
 
-It reads a file with one zone name per line, followed by columns enumerating
-the zone's authoritative nameservers (these must be known a priori).  Columns
-are sparated by whitespace.  The scanner outputs DS record sets for each zone
-whose bootstrapping records could be retrieved and validated.
+The algorithm presupposes an existing DNSSEC chain of trust to the NS
+records' target hostnames.
+The DNS operator can publish authentication information under the subdomains
+of these hostnames.
+For the specification, see
+https://datatracker.ietf.org/doc/draft-thomassen-dnsop-dnssec-bootstrapping/.
 
 CDS records are scanned using default resolver of the host, which MUST be
 DNSSEC-aware and MUST perform DNSSEC-validation.
 
 
-## Installation and Usage
+## Installation
 
 This package can be installed using [`pip`](https://pypi.org/project/pip/),
 preferably into its own
@@ -23,6 +24,31 @@ preferably into its own
     $ source venv/bin/activate
     (venv)$ pip install -e .
     (venv)$ dsbootstrap --help
+
+
+## Usage
+
+It is assumed that the tool is run by a parental agent (registry/registrar),
+so that the user knows each delegation's NS records in advance.
+They have to be specified as an input and form the trust anchor for
+CDS/CDNSKEY authentication.
+
+- **Input:**
+  The tool reads from standard input, expecting (in each line) a zone name
+  (e.g. `example.co.uk.`) followed by the delegations NS hostnames.
+  Columns are separated by whitespace.
+
+  Instead of a zone name, it is also possible to specify the immediate
+  ancestor (one level up from the child) prefixed with a dot (e.g. `.co.uk.`),
+  to request processing of all delegations at that ancestor name for which the
+  given nameservers can provide authenticated bootstrapping of DS records.
+  (This requires that the DNS operator's nameserver zones support NSEC
+  walking.)
+
+  The two modes of operation can be mixed across input lines.
+
+- **Output:** The scanner outputs DS record sets for each zone whose
+  bootstrapping records could be retrieved and validated.
 
 ### Bootstrap an explicit list of delegations
 
@@ -35,12 +61,7 @@ preferably into its own
 
 ### Bulk bootstrap
 
-`dsbootstrap` can scan the DNS operator's signaling zones for bootstrappable
-delegations based on the name of the immediate ancestor (i.e. one level up)
-by prefixing the ancestor's name with a dot.
-
-For example, a scan for second-level delegations within the `cl.` TLD can be
-done like this:
+A scan for second-level delegations under the `cl.` TLD can be done like this:
 
     (venv)$ dsbootstrap <<< ".cl. ns1.desec.io. ns2.desec.org."
     2021-09-21 19:53:08,590 WARNING: Performing NSEC walk of cl. on ['ns1.desec.io.', 'ns2.desec.org.'] ...
@@ -48,13 +69,11 @@ done like this:
     dnssec-bootstrap-test1.cl. 0 IN DS 36169 13 4 6bbb9cdc008c0c588a68bdcc44a2f0484d28bb6576ee9128367833a7a4526041d127c781b8b7eeb5d526e675c6af62eb
     # ... other delegations follow ...
 
-The two modes of operation can be mixed.
-
 
 ## DNSSEC algorithm support
 
 For each zone, the utility validates that for each signing algorithm that
 appears in the DS record set, the zone's DNSKEY record set is signed by at
 least one key.  This is done using [dnspython](https://www.dnspython.org/).
-Therefore, the list of supported algorithms is same as the list of supported
-DNSSEC algorithms of `dnspython`.
+Therefore, the list of supported algorithms is the same as the list of
+supported DNSSEC algorithms of dnspython.
