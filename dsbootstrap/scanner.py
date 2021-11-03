@@ -31,10 +31,15 @@ def signaling_hash(domain):
 
 
 def next_nsec_prefix(prefix, ancestor):
-    res = query_dns(prefix + ancestor, 'NSEC')
-    rdataset, = [rdataset for rdataset in chain(res.response.answer, res.response.authority)
-                 if rdataset.rdtype == dns.rdatatype.RdataType.NSEC]
-    next_name = rdataset[0].next
+    qname = prefix + ancestor
+    res = query_dns(qname, 'NSEC')
+    try:
+        rrset, = [rrset for rrset in chain(res.response.answer, res.response.authority)
+                  if rrset.rdtype == dns.rdatatype.RdataType.NSEC]
+    except AttributeError:
+        record(qname, Event.DNS_FAILURE)
+        return None
+    next_name = rrset[0].next
     return next_name - ancestor if next_name.is_subdomain(ancestor) else None
 
 
@@ -66,11 +71,14 @@ def do_scan(obj):
     domain = dns.name.from_text(domain.lower())
     logger.info(f"Processing domain: {domain}")
 
-    # TODO move steps to separate functions, at unit tests
+    # TODO move steps to separate functions, add unit tests
 
     ### Step 1
     ds = query_dns(domain, 'DS')
-    if ds:
+    if ds is None:
+        record(domain, Event.DNS_FAILURE)
+        return
+    elif ds:
         record(domain, Event.HAVE_DS)
         return
 
@@ -83,7 +91,6 @@ def do_scan(obj):
             auths_map[auth] |= {a.address for a in r}
 
     ### Step 2
-    # TODO check opt out?
     res = fetch_rrset_with_consistency(domain, 'CDS', auths_map)
     if res is None:
         record(domain, Event.CHILD_CDS_INCONSISTENT)
@@ -133,7 +140,7 @@ def do_scan(obj):
     ds = dns.rrset.RRset(domain, dns.rdataclass.IN, dns.rdatatype.DS)
     for rdata in cds:
         ds.add(dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.DS, rdata))
-    # TODO do something with cdnskey?
+    # TODO do something with CDNSKEY?
     logger.debug(f"DS set: {ds}")
 
     ### Step 6
@@ -174,7 +181,10 @@ def query_dns(domain, rdtype, nameservers=None):
     except dns.resolver.NoNameservers:
         # Is this a DNSSEC failure?
         try:
-            resolver.flags |= dns.flags.CD
+            try:
+                resolver.flags |= dns.flags.CD
+            except TypeError:  # None
+                resolver.flags = dns.flags.CD
             resolver.resolve(domain, rdtype, raise_on_no_answer=False)
             logger.warning(f"Bogus DNSSEC for domain: {domain}")
             record(domain, Event.DNS_BOGUS)

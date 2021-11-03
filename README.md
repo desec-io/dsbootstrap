@@ -50,14 +50,16 @@ CDS/CDNSKEY authentication.
 - **Output:** The scanner outputs DS record sets for each zone whose
   bootstrapping records could be retrieved and validated.
 
+  It is currently based on CDS records only (CDNSKEY is ignored).
+
 ### Bootstrap an explicit list of delegations
 
     (venv)$ $ dsbootstrap <<EOF
-    > dnssec-bootstrap-test1.cl. ns1.desec.io. ns2.desec.org.
+    > test-dnssec-bootstrap.cl. ns1.desec.io. ns2.desec.org.
     # ... add more child zones and their NS hostnames here ...
     > EOF
-    dnssec-bootstrap-test1.cl. 0 IN DS 36169 13 2 7b5c698234bb872aa32d9550f386f364821f27c6042c2462b477296639ba2bc5
-    dnssec-bootstrap-test1.cl. 0 IN DS 36169 13 4 6bbb9cdc008c0c588a68bdcc44a2f0484d28bb6576ee9128367833a7a4526041d127c781b8b7eeb5d526e675c6af62eb
+    test-dnssec-bootstrap.cl. 0 IN DS 65147 13 4 732f4a906d044e4e176d44b9ca9add3f71ef1e0e84c2792fe257727604010e2814654133defab56fc2fa7258100ffd27
+    test-dnssec-bootstrap.cl. 0 IN DS 65147 13 2 15c19a6aaa4dfdee56ba0e6e8042765a2c4abeca2f69109f63149e5291ec6c75
 
 ### Bulk bootstrap
 
