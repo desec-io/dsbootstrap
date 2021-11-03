@@ -52,17 +52,15 @@ def check_auths(domain, auths):
     parent = dns.name.from_text(domain).parent()  # tentative parent
     parent = dns.resolver.zone_for_name(parent, resolver=get_resolver())  # real parent (perhaps higher up)
 
-    # TODO share across function calls / tasks
     res = query_dns(parent, 'NS')
     if res is None:
         record(parent, Event.DNS_FAILURE)
         return False
 
-    nameservers = []
-    for ns in res.rrset:
-        for rdtype in ["AAAA", "A"]:
-            r = get_resolver().resolve(ns.target, rdtype, raise_on_no_answer=False)
-            nameservers += [a.address for a in r]
+    ns = [rr.target.to_text() for rr in res.rrset]
+    update_auths_map(ns)
+    nameservers = [global_auths_map[target] for target in ns]  # list of list of IPs
+    nameservers = list({ip for nameserver in nameservers for ip in nameserver})  # flat list of IPs
 
     res = query_dns(domain, 'NS', nameservers=nameservers)
     if res is None:
