@@ -14,6 +14,9 @@ from .log import logger
 from .stats import record, Event
 
 
+global_auths_map = defaultdict(set)
+
+
 # https://docs.python.org/3/library/itertools.html#itertools-recipes
 # We can't use len(set(...)) == 1 because set elements need to be hashable,
 # but the RRsets we want to check aren't.
@@ -87,6 +90,14 @@ def walk_ancestor(ancestor, auths):
     return [' '.join([candidate, *auths]) for candidate in candidates if check_auths(candidate, auths)]
 
 
+def update_auths_map(auths):
+    for auth in auths:
+        if auth not in global_auths_map:
+            for rdtype in ["AAAA", "A"]:
+                r = dns.resolver.resolve(auth, rdtype, raise_on_no_answer=False)
+                global_auths_map[auth] |= {a.address for a in r}
+
+
 def do_scan(obj):
     """
     Scan for CDS/CDNSKEY records for given tuple of child domain and its
@@ -115,12 +126,8 @@ def do_scan(obj):
         return
 
     # Fetch auth IP addresses
-    # TODO share across tasks
-    auths_map = defaultdict(set)
-    for auth in auths:
-        for rdtype in ["AAAA", "A"]:
-            r = dns.resolver.resolve(auth, rdtype, raise_on_no_answer=False)
-            auths_map[auth] |= {a.address for a in r}
+    update_auths_map(auths)
+    auths_map = {k: v for k, v in global_auths_map.items() if k in auths}
 
     ### Step 2
     res = fetch_rrset_with_consistency(domain, 'CDS', auths_map)
