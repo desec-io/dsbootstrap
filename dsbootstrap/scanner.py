@@ -63,12 +63,18 @@ def check_auths(domain, auths):
     nameservers = list({ip for nameserver in nameservers for ip in nameserver})  # flat list of IPs
 
     res = query_dns(domain, 'NS', nameservers=nameservers)
-    if res is None:
+    if res is None:  # NXDOMAIN
         logger.info(f'Skipping {domain} (could not retrieve NS records from parent).')
         record(parent, Event.DNS_FAILURE)
         return False
 
-    rrset, = [rrset for rrset in res.response.authority if rrset.rdtype == dns.rdatatype.RdataType.NS]
+    try:
+        rrset, = [rrset for rrset in res.response.authority if rrset.rdtype == dns.rdatatype.RdataType.NS]
+    except ValueError:  # NOERROR (e.g. .tk if delegation does not exist; perhaps only affects parents without DNSSEC)
+        logger.info(f'Skipping {domain} (could not retrieve NS records from parent).')
+        record(parent, Event.DNS_FAILURE)
+        return False
+
     if sorted(auths) != sorted([ns.target.to_text() for ns in rrset]):
         logger.info(f'Skipping {domain} which is delegated to other nameservers.')
         return False
