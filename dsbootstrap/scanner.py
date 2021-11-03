@@ -43,6 +43,38 @@ def next_nsec_prefix(prefix, ancestor):
     return next_name - ancestor if next_name.is_subdomain(ancestor) else None
 
 
+def check_auths(domain, auths):
+    logger.warning(f"Confirming NS RRset for delegation {domain} via DNS. "
+                   f"In production, the parental agent MUST retrieve this from its local database!")
+    parent = dns.name.from_text(domain).parent()  # tentative parent
+    parent = dns.resolver.zone_for_name(parent, resolver=get_resolver())  # real parent (perhaps higher up)
+
+    # TODO share across function calls / tasks
+    res = query_dns(parent, 'NS')
+    if res is None:
+        record(parent, Event.DNS_FAILURE)
+        return False
+
+    nameservers = []
+    for ns in res.rrset:
+        for rdtype in ["AAAA", "A"]:
+            r = get_resolver().resolve(ns.target, rdtype, raise_on_no_answer=False)
+            nameservers += [a.address for a in r]
+
+    res = query_dns(domain, 'NS', nameservers=nameservers)
+    if res is None:
+        logger.info(f'Skipping {domain} (could not retrieve NS records from parent).')
+        record(parent, Event.DNS_FAILURE)
+        return False
+
+    rrset, = [rrset for rrset in res.response.authority if rrset.rdtype == dns.rdatatype.RdataType.NS]
+    if sorted(auths) != sorted([ns.target.to_text() for ns in rrset]):
+        logger.info(f'Skipping {domain} which is delegated to other nameservers.')
+        return False
+    else:
+        return True
+
+
 def walk_ancestor(ancestor, auths):
     prefix_map = {auth: set() for auth in auths}
     for auth in auths:
@@ -51,7 +83,8 @@ def walk_ancestor(ancestor, auths):
         while next_prefix:
             prefix_map[auth].add(next_prefix)
             next_prefix = next_nsec_prefix(next_prefix, entrypoint)
-    return [ ' '.join([str(prefix + ancestor), *auths]) for prefix in set.intersection(*prefix_map.values()) ]
+    candidates = {str(prefix + ancestor) for prefix in set.intersection(*prefix_map.values())}
+    return [' '.join([candidate, *auths]) for candidate in candidates if check_auths(candidate, auths)]
 
 
 def do_scan(obj):
@@ -64,8 +97,7 @@ def do_scan(obj):
     domain, *auths = obj
     if domain[0] == '.':
         domain = domain[1:]
-        logger.warning(f'Performing NSEC walk of {domain} on {auths} ...')
-        # TODO make sure that zones are in fact delegated to *auths (prevent sneaking in other zones from NSEC walk)
+        logger.info(f'Performing NSEC walk of {domain} on {auths} ...')
         return walk_ancestor(dns.name.from_text(domain), auths)
 
     domain = dns.name.from_text(domain.lower())
@@ -161,9 +193,7 @@ def do_scan(obj):
     return ds
 
 
-def query_dns(domain, rdtype, nameservers=None):
-    """Make a query to the local resolver. Return answer object."""
-    logger.debug(f'Querying {rdtype} for {domain}')
+def get_resolver(nameservers=None):
     default_resolver = dns.resolver.get_default_resolver()
     # We use separate resolver instance per query
     resolver = dns.resolver.Resolver(configure=False)
@@ -176,6 +206,13 @@ def query_dns(domain, rdtype, nameservers=None):
         resolver.nameservers = list(nameservers)
         # TODO When querying auths directly, there's no resolver doing validation.  Add timestamp check etc.
     resolver.use_edns(0, dns.flags.DO, 1200)
+    return resolver
+
+
+def query_dns(domain, rdtype, nameservers=None):
+    """Make a query to the local resolver. Return answer object."""
+    logger.debug(f'Querying {rdtype} for {domain} ...')
+    resolver = get_resolver(nameservers)
     try:
         return resolver.resolve(domain, rdtype, raise_on_no_answer=False)
     except dns.resolver.NoNameservers:

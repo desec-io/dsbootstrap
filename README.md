@@ -66,9 +66,15 @@ CDS/CDNSKEY authentication.
 A scan for second-level delegations under the `cl.` TLD can be done like this:
 
     (venv)$ dsbootstrap <<< ".cl. ns1.desec.io. ns2.desec.org."
-    2021-09-21 19:53:08,590 WARNING: Performing NSEC walk of cl. on ['ns1.desec.io.', 'ns2.desec.org.'] ...
-    dnssec-bootstrap-test1.cl. 0 IN DS 36169 13 2 7b5c698234bb872aa32d9550f386f364821f27c6042c2462b477296639ba2bc5
-    dnssec-bootstrap-test1.cl. 0 IN DS 36169 13 4 6bbb9cdc008c0c588a68bdcc44a2f0484d28bb6576ee9128367833a7a4526041d127c781b8b7eeb5d526e675c6af62eb
+    2021-11-03 14:16:40.267 WARNING: Performing NSEC walk of cl. on ['ns1.desec.io.', 'ns2.desec.org.'] ...
+    2021-11-03 14:16:41.129 WARNING: Confirming NS RRset for delegation dnssec-bootstrap-test1.cl. via DNS. In production, the parental agent MUST retrieve this from its local database!
+    2021-11-03 14:16:42.657 WARNING: Skipping dnssec-bootstrap-test1.cl. (could not retrieve NS records from parent).
+    2021-11-03 14:16:42.657 WARNING: Confirming NS RRset for delegation vulcano.cl. via DNS. In production, the parental agent MUST retrieve this from its local database!
+    2021-11-03 14:16:44.342 WARNING: Skipping vulcano.cl. which is delegated to other nameservers.
+    2021-11-03 14:16:44.343 WARNING: Confirming NS RRset for delegation test-dnssec-bootstrap.cl. via DNS. In production, the parental agent MUST retrieve this from its local database!
+    # ... other delegations follow ...
+    test-dnssec-bootstrap.cl. 0 IN DS 65147 13 2 15c19a6aaa4dfdee56ba0e6e8042765a2c4abeca2f69109f63149e5291ec6c75
+    test-dnssec-bootstrap.cl. 0 IN DS 65147 13 4 732f4a906d044e4e176d44b9ca9add3f71ef1e0e84c2792fe257727604010e2814654133defab56fc2fa7258100ffd27
     # ... other delegations follow ...
 
 
