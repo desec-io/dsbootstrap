@@ -85,7 +85,7 @@ def check_auths(domain, auths):
 def walk_ancestor(ancestor, auths):
     prefix_map = {auth: set() for auth in auths}
     for auth in auths:
-        entrypoint = dns.name.Name([signaling_hash(ancestor), '_boot']) + dns.name.from_text(auth)
+        entrypoint = dns.name.Name([signaling_hash(ancestor), '_dsauth']) + dns.name.from_text(auth)
         next_prefix = next_nsec_prefix(dns.name.Name([]), entrypoint)
         while next_prefix:
             prefix_map[auth].add(next_prefix)
@@ -148,7 +148,7 @@ def do_scan(obj):
 
     ### Step 3
     signaling_name = dns.name.Name([domain[0], signaling_hash(domain.parent())])
-    signaling_fqdns = {signaling_name + dns.name.Name(['_boot']) + dns.name.from_text(auth) for auth in auths}
+    signaling_fqdns = {signaling_name + dns.name.Name(['_dsauth']) + dns.name.from_text(auth) for auth in auths}
 
     for signaling_fqdn in signaling_fqdns:
         res = query_dns_and_extract_rdata(signaling_fqdn, 'CDS')
