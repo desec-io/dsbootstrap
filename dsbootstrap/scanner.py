@@ -147,8 +147,7 @@ def do_scan(obj):
     cdnskey_map = {None: res}
 
     ### Step 3
-    signaling_name = dns.name.Name([domain[0], signaling_hash(domain.parent())])
-    signaling_fqdns = {signaling_name + dns.name.Name(['_dsauth']) + dns.name.from_text(auth) for auth in auths}
+    signaling_fqdns = {domain - dns.name.root + dns.name.Name(['_dsauth']) + dns.name.from_text(auth) for auth in auths}
 
     for signaling_fqdn in signaling_fqdns:
         res = query_dns_and_extract_rdata(signaling_fqdn, 'CDS')
