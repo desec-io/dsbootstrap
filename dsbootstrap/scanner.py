@@ -291,6 +291,7 @@ def query_dns_and_extract_rdata(qname, rdtype):
     res = query_dns(qname, rdtype)
     if res is None:
         record(qname, Event.DNS_FAILURE)
+        return None
     elif res.rrset is None:
         return None
     return {rd.to_text() for rd in res}
