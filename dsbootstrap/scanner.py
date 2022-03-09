@@ -26,13 +26,6 @@ def all_equal(iterable):
     return next(g, True) and not next(g, False)
 
 
-def signaling_hash(domain):
-    suffix_wire_format = domain.to_wire()
-    suffix_digest = sha256(suffix_wire_format).digest()
-    suffix_digest = b32encode(suffix_digest).translate(b32_normal_to_hex).rstrip(b'=')
-    return suffix_digest.lower()
-
-
 def next_nsec_prefix(prefix, ancestor):
     qname = prefix + ancestor
     res = query_dns(qname, 'NSEC')
@@ -85,7 +78,7 @@ def check_auths(domain, auths):
 def walk_ancestor(ancestor, auths):
     prefix_map = {auth: set() for auth in auths}
     for auth in auths:
-        entrypoint = dns.name.Name([signaling_hash(ancestor), '_dsauth']) + dns.name.from_text(auth)
+        entrypoint = ancestor - dns.name.root + dns.name.Name(['_dsauth']) + dns.name.from_text(auth)
         next_prefix = next_nsec_prefix(dns.name.Name([]), entrypoint)
         while next_prefix:
             prefix_map[auth].add(next_prefix)

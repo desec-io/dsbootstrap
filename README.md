@@ -63,10 +63,15 @@ CDS/CDNSKEY authentication.
 
 ### Bulk bootstrap
 
-A scan for second-level delegations under the `cl.` TLD can be done like this:
+A scan for second-level delegations under the `cl.` TLD can be done as follows.
 
-    (venv)$ dsbootstrap <<< ".cl. ns1.desec.io. ns2.desec.org."
-    2021-11-03 14:16:40.267 WARNING: Performing NSEC walk of cl. on ['ns1.desec.io.', 'ns2.desec.org.'] ...
+**Note:** The signaling zones need to operate in NSEC mode to allow iterating
+over the bootstrapping names. (This is indicated by nameservers `ns1-with-nsec`
+etc. for illustration. They do not really exist; you would have to set up your
+own nameservers accordingly.)
+
+    (venv)$ dsbootstrap <<< ".cl. ns1-with-nsec.desec.io. ns2-with-nsec.desec.org."
+    2021-11-03 14:16:40.267 WARNING: Performing NSEC walk of cl. on ['ns1-with-nsec.desec.io.', 'ns2-with-nsec.desec.org.'] ...
     2021-11-03 14:16:41.129 WARNING: Confirming NS RRset for delegation dnssec-bootstrap-test1.cl. via DNS. In production, the parental agent MUST retrieve this from its local database!
     2021-11-03 14:16:42.657 WARNING: Skipping dnssec-bootstrap-test1.cl. (could not retrieve NS records from parent).
     2021-11-03 14:16:42.657 WARNING: Confirming NS RRset for delegation vulcano.cl. via DNS. In production, the parental agent MUST retrieve this from its local database!
